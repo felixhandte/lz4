@@ -356,6 +356,7 @@ typedef struct {
     uint32_t currentOffset;
     uint32_t initCheck;
     const uint8_t* dictionary;
+    const uint32_t* dictHashTable;
     uint32_t dictSize;
 } LZ4_stream_t_internal;
 
@@ -373,6 +374,7 @@ typedef struct {
     unsigned int currentOffset;
     unsigned int initCheck;
     const unsigned char* dictionary;
+    const unsigned int* dictHashTable;
     unsigned int dictSize;
 } LZ4_stream_t_internal;
 
@@ -393,7 +395,7 @@ typedef struct {
  *        this definition is not API/ABI safe,
  *        it may change in a future version !
  */
-#define LZ4_STREAMSIZE_U64 ((1 << (LZ4_MEMORY_USAGE-3)) + 3)
+#define LZ4_STREAMSIZE_U64 ((1 << (LZ4_MEMORY_USAGE-3)) + 4)
 #define LZ4_STREAMSIZE     (LZ4_STREAMSIZE_U64 * sizeof(unsigned long long))
 union LZ4_stream_u {
     unsigned long long table[LZ4_STREAMSIZE_U64];

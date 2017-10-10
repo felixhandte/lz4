@@ -513,14 +513,14 @@ LZ4_FORCE_INLINE void LZ4_putPosition(const BYTE* p, void* tableBase, tableType_
     LZ4_putPositionOnHash(p, h, tableBase, tableType, srcBase);
 }
 
-static const BYTE* LZ4_getPositionOnHash(U32 h, void* tableBase, tableType_t tableType, const BYTE* srcBase)
+static const BYTE* LZ4_getPositionOnHash(U32 h, const void* tableBase, tableType_t tableType, const BYTE* srcBase)
 {
-    if (tableType == byPtr) { const BYTE** hashTable = (const BYTE**) tableBase; return hashTable[h]; }
-    if (tableType == byU32) { const U32* const hashTable = (U32*) tableBase; return hashTable[h] + srcBase; }
-    { const U16* const hashTable = (U16*) tableBase; return hashTable[h] + srcBase; }   /* default, to ensure a return */
+    if (tableType == byPtr) { const BYTE* const* hashTable = (const BYTE* const*) tableBase; return hashTable[h]; }
+    if (tableType == byU32) { const U32* const hashTable = (const U32*) tableBase; return hashTable[h] + srcBase; }
+    { const U16* const hashTable = (const U16*) tableBase; return hashTable[h] + srcBase; }   /* default, to ensure a return */
 }
 
-LZ4_FORCE_INLINE const BYTE* LZ4_getPosition(const BYTE* p, void* tableBase, tableType_t tableType, const BYTE* srcBase)
+LZ4_FORCE_INLINE const BYTE* LZ4_getPosition(const BYTE* p, const void* tableBase, tableType_t tableType, const BYTE* srcBase)
 {
     U32 const h = LZ4_hashPosition(p, tableType);
     return LZ4_getPositionOnHash(h, tableBase, tableType, srcBase);
@@ -547,7 +547,7 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
     const BYTE* const lowRefLimit = ip - cctx->dictSize;
     const BYTE* const dictionary = cctx->dictionary;
     const BYTE* const dictEnd = dictionary + cctx->dictSize;
-    const ptrdiff_t dictDelta = dictEnd - (const BYTE*)source;
+    const ptrdiff_t dictDelta = dictionary ? dictEnd - (const BYTE*)source : 0;
     const BYTE* anchor = (const BYTE*) source;
     const BYTE* const iend = ip + inputSize;
     const BYTE* const mflimit = iend - MFLIMIT;
@@ -603,7 +603,13 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
 
                 match = LZ4_getPositionOnHash(h, cctx->hashTable, tableType, base);
                 if (dict==usingExtDict) {
-                    if (match < (const BYTE*)source) {
+                    if (match == base) {
+                        /* there was no match at all, try the dictionary */
+                        if (cctx->dictHashTable != NULL) {
+                            match = LZ4_getPositionOnHash(h, cctx->dictHashTable, tableType, source);
+                        }
+                    }
+                    if (match < (const BYTE*)source && dictionary != NULL) {
                         refDelta = dictDelta;
                         lowLimit = dictionary;
                     } else {
@@ -623,6 +629,7 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
 
         /* Encode Literals */
         {   unsigned const litLength = (unsigned)(ip - anchor);
+
             token = op++;
             if ((outputLimited) &&  /* Check output buffer overflow */
                 (unlikely(op + litLength + (2 + 1 + LASTLITERALS) + (litLength/255) > olimit)))
@@ -647,7 +654,7 @@ _next_match:
         /* Encode MatchLength */
         {   unsigned matchCode;
 
-            if ((dict==usingExtDict) && (lowLimit==dictionary)) {
+            if ((dict==usingExtDict) && (dictionary != NULL) && (lowLimit==dictionary)) {
                 const BYTE* limit;
                 match += refDelta;
                 limit = ip + (dictEnd-match);
@@ -693,7 +700,13 @@ _next_match:
         /* Test next position */
         match = LZ4_getPosition(ip, cctx->hashTable, tableType, base);
         if (dict==usingExtDict) {
-            if (match < (const BYTE*)source) {
+            if (match == base) {
+                /* there was no match at all, try the dictionary */
+                if (cctx->dictHashTable != NULL) {
+                    match = LZ4_getPosition(ip, cctx->dictHashTable, tableType, base);
+                }
+            }
+            if (match < (const BYTE*)source && dictionary != NULL) {
                 refDelta = dictDelta;
                 lowLimit = dictionary;
             } else {
