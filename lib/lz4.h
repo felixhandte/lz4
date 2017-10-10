@@ -180,13 +180,21 @@ LZ4LIB_API int LZ4_compress_fast (const char* src, char* dst, int srcSize, int d
 
 
 /*!
+LZ4_compress_fast_safeExtState() :
 LZ4_compress_fast_extState() :
     Same compression function, just using an externally allocated memory space to store compression state.
     Use LZ4_sizeofState() to know how much memory must be allocated,
     and allocate it on 8-bytes boundaries (using malloc() typically).
     Then, provide it as 'void* state' to compression function.
+
+    Use _safeExtState variant if LZ4_resetStream() was called on the state
+    buffer before being used for the first time (calls to this function leave
+    the state in a safe state, so zeroing is not required between calls).
+    Otherwise, using legacy _extState requires LZ4 to reinitialize the state
+    internally for every call.
 */
 LZ4LIB_API int LZ4_sizeofState(void);
+LZ4LIB_API int LZ4_compress_fast_safeExtState (void* state, const char* src, char* dst, int srcSize, int dstCapacity, int acceleration);
 LZ4LIB_API int LZ4_compress_fast_extState (void* state, const char* src, char* dst, int srcSize, int dstCapacity, int acceleration);
 
 
@@ -351,13 +359,16 @@ LZ4LIB_API int LZ4_decompress_fast_usingDict (const char* src, char* dst, int or
 #if defined(__cplusplus) || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */)
 #include <stdint.h>
 
-typedef struct {
+typedef struct LZ4_stream_t_internal LZ4_stream_t_internal;
+struct LZ4_stream_t_internal {
     uint32_t hashTable[LZ4_HASH_SIZE_U32];
     uint32_t currentOffset;
-    uint32_t initCheck;
+    uint16_t initCheck;
+    uint16_t tableType;
     const uint8_t* dictionary;
+    const LZ4_stream_t_internal* dictCtx;
     uint32_t dictSize;
-} LZ4_stream_t_internal;
+};
 
 typedef struct {
     const uint8_t* externalDict;
@@ -368,13 +379,16 @@ typedef struct {
 
 #else
 
-typedef struct {
+typedef struct LZ4_stream_t_internal LZ4_stream_t_internal;
+struct LZ4_stream_t_internal {
     unsigned int hashTable[LZ4_HASH_SIZE_U32];
     unsigned int currentOffset;
-    unsigned int initCheck;
+    unsigned short initCheck;
+    unsigned short tableType;
     const unsigned char* dictionary;
+    const LZ4_stream_t_internal* dictCtx;
     unsigned int dictSize;
-} LZ4_stream_t_internal;
+};
 
 typedef struct {
     const unsigned char* externalDict;
@@ -393,7 +407,7 @@ typedef struct {
  *        this definition is not API/ABI safe,
  *        it may change in a future version !
  */
-#define LZ4_STREAMSIZE_U64 ((1 << (LZ4_MEMORY_USAGE-3)) + 3)
+#define LZ4_STREAMSIZE_U64 ((1 << (LZ4_MEMORY_USAGE-3)) + 4)
 #define LZ4_STREAMSIZE     (LZ4_STREAMSIZE_U64 * sizeof(unsigned long long))
 union LZ4_stream_u {
     unsigned long long table[LZ4_STREAMSIZE_U64];

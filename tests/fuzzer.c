@@ -572,11 +572,13 @@ static int FUZ_test(U32 seed, U32 nbCycles, const U32 startCycle, const double c
         FUZ_DISPLAYTEST;
         dict -= (FUZ_rand(&randState) & 0xF) + 1;   /* Separation, so it is an ExtDict */
         if (dict < (char*)CNBuffer) dict = (char*)CNBuffer;
+        LZ4_resetStream(&LZ4dict); /* in order to compress identically */
         LZ4_loadDict(&LZ4dict, dict, dictSize);
         blockContinueCompressedSize = LZ4_compress_fast_continue(&LZ4dict, block, compressedBuffer, blockSize, (int)compressedBufferSize, 1);
         FUZ_CHECKTEST(blockContinueCompressedSize==0, "LZ4_compress_fast_continue failed");
 
         FUZ_DISPLAYTEST;
+        LZ4_resetStream(&LZ4dict); /* in order to compress identically */
         LZ4_loadDict(&LZ4dict, dict, dictSize);
         ret = LZ4_compress_fast_continue(&LZ4dict, block, compressedBuffer, blockSize, blockContinueCompressedSize-1, 1);
         FUZ_CHECKTEST(ret>0, "LZ4_compress_fast_continue using ExtDict should fail : one missing byte for output buffer : %i written, %i buffer", ret, blockContinueCompressedSize);
