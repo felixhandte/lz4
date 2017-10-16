@@ -565,6 +565,15 @@ int main(int argc, const char** argv)
 #endif
     }
 
+    if (dictionary_filename) {
+        if (!strcmp(dictionary_filename, stdinmark) && IS_CONSOLE(stdin)) {
+            DISPLAYLEVEL(1, "refusing to read from a console\n");
+            exit(1);
+        }
+
+        LZ4IO_setDictionaryFilename(dictionary_filename);
+    }
+
     /* benchmark and test modes */
     if (mode == om_bench) {
         BMK_setNotificationLevel(displayLevel);
@@ -576,15 +585,6 @@ int main(int argc, const char** argv)
         LZ4IO_setTestMode(1);
         output_filename = nulmark;
         mode = om_decompress;   /* defer to decompress */
-    }
-
-    if (dictionary_filename) {
-        if (!strcmp(dictionary_filename, stdinmark) && IS_CONSOLE(stdin)) {
-            DISPLAYLEVEL(1, "refusing to read from a console\n");
-            exit(1);
-        }
-
-        LZ4IO_setDictionaryFilename(dictionary_filename);
     }
 
     /* compress or decompress */

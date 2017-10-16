@@ -47,11 +47,10 @@
 
 
 #include "lz4.h"
-#define COMPRESSOR0 LZ4_compress_local
-static int LZ4_compress_local(const char* src, char* dst, int srcSize, int dstSize, int clevel) { (void)clevel; return LZ4_compress_default(src, dst, srcSize, dstSize); }
 #include "lz4hc.h"
-#define COMPRESSOR1 LZ4_compress_HC
-#define DEFAULTCOMPRESSOR COMPRESSOR0
+#include "lz4frame.h"
+#include "lz4frame_static.h"
+#include "lz4io.h"
 #define LZ4_isError(errcode) (errcode==0)
 
 
@@ -147,28 +146,45 @@ typedef struct {
     size_t resSize;
 } blockParam_t;
 
-struct compressionParameters
-{
-    int (*compressionFunction)(const char* src, char* dst, int srcSize, int dstSize, int cLevel);
-};
 
 #define MIN(a,b) ((a)<(b) ? (a) : (b))
 #define MAX(a,b) ((a)>(b) ? (a) : (b))
+
+static LZ4F_preferences_t BMK_getLZ4FPreferences(int cLevel) {
+    LZ4F_preferences_t prefs;
+    memset(&prefs, 0, sizeof(LZ4F_preferences_t));
+    prefs.compressionLevel = cLevel;
+    return prefs;
+}
 
 static int BMK_benchMem(const void* srcBuffer, size_t srcSize,
                         const char* displayName, int cLevel,
                         const size_t* fileSizes, U32 nbFiles)
 {
+    LZ4F_preferences_t prefs = BMK_getLZ4FPreferences(cLevel);
     size_t const blockSize = (g_blockSize>=32 ? g_blockSize : srcSize) + (!srcSize) /* avoid div by 0 */ ;
     U32 const maxNbBlocks = (U32) ((srcSize + (blockSize-1)) / blockSize) + nbFiles;
     blockParam_t* const blockTable = (blockParam_t*) malloc(maxNbBlocks * sizeof(blockParam_t));
-    size_t const maxCompressedSize = LZ4_compressBound((int)srcSize) + (maxNbBlocks * 1024);   /* add some room for safety */
+    size_t const maxCompressedSize = maxNbBlocks * LZ4F_compressFrameBound(blockSize, &prefs);
     void* const compressedBuffer = malloc(maxCompressedSize);
     void* const resultBuffer = malloc(srcSize);
     U32 nbBlocks;
     UTIL_time_t ticksPerSecond;
-    struct compressionParameters compP;
     int cfunctionId;
+    LZ4F_CDict* cdict = NULL;
+    const void* dict = NULL;
+    size_t dictSize = 0;
+    LZ4F_dctx* dctx;
+
+    LZ4F_errorCode_t errorCode = LZ4F_createDecompressionContext(&dctx, LZ4F_VERSION);
+    if (LZ4F_isError(errorCode)) EXM_THROW(31, "Can't create LZ4F context : %s", LZ4F_getErrorName(errorCode));
+
+    if (LZ4IO_getDictionaryFilename() != NULL) {
+        cdict = LZ4IO_createCDict();
+        dict = LZ4IO_createDict(LZ4IO_getDictionaryFilename(), &dictSize);
+        if (!cdict || !dict)
+            EXM_THROW(31, "Dictionary error : could not create dictionary");
+    }
 
     /* checks */
     if (!compressedBuffer || !resultBuffer || !blockTable)
@@ -177,19 +193,6 @@ static int BMK_benchMem(const void* srcBuffer, size_t srcSize,
     /* init */
     if (strlen(displayName)>17) displayName += strlen(displayName)-17;   /* can only display 17 characters */
     UTIL_initTimer(&ticksPerSecond);
-
-    /* Init */
-    if (cLevel < LZ4HC_CLEVEL_MIN) cfunctionId = 0; else cfunctionId = 1;
-    switch (cfunctionId)
-    {
-#ifdef COMPRESSOR0
-    case 0 : compP.compressionFunction = COMPRESSOR0; break;
-#endif
-#ifdef COMPRESSOR1
-    case 1 : compP.compressionFunction = COMPRESSOR1; break;
-#endif
-    default : compP.compressionFunction = DEFAULTCOMPRESSOR;
-    }
 
     /* Init blockTable data */
     {   const char* srcPtr = (const char*)srcBuffer;
@@ -206,7 +209,7 @@ static int BMK_benchMem(const void* srcBuffer, size_t srcSize,
                 blockTable[nbBlocks].cPtr = cPtr;
                 blockTable[nbBlocks].resPtr = resPtr;
                 blockTable[nbBlocks].srcSize = thisBlockSize;
-                blockTable[nbBlocks].cRoom = LZ4_compressBound((int)thisBlockSize);
+                blockTable[nbBlocks].cRoom = LZ4F_compressFrameBound((int)thisBlockSize, &prefs);
                 srcPtr += thisBlockSize;
                 cPtr += blockTable[nbBlocks].cRoom;
                 resPtr += thisBlockSize;
@@ -255,8 +258,9 @@ static int BMK_benchMem(const void* srcBuffer, size_t srcSize,
                 do {
                     U32 blockNb;
                     for (blockNb=0; blockNb<nbBlocks; blockNb++) {
-                        size_t const rSize = compP.compressionFunction(blockTable[blockNb].srcPtr, blockTable[blockNb].cPtr, (int)blockTable[blockNb].srcSize, (int)blockTable[blockNb].cRoom, cLevel);
-                        if (LZ4_isError(rSize)) EXM_THROW(1, "LZ4_compress() failed");
+                        cLevel++;
+                        size_t const rSize = LZ4F_compressFrame_usingCDict(blockTable[blockNb].cPtr, blockTable[blockNb].cRoom, blockTable[blockNb].srcPtr, blockTable[blockNb].srcSize, cdict, &prefs);
+                        if (LZ4F_isError(rSize)) EXM_THROW(1, "LZ4F_compressFrame_usingCDict() failed");
                         blockTable[blockNb].cSize = rSize;
                     }
                     nbLoops++;
@@ -290,9 +294,9 @@ static int BMK_benchMem(const void* srcBuffer, size_t srcSize,
                 do {
                     U32 blockNb;
                     for (blockNb=0; blockNb<nbBlocks; blockNb++) {
-                        size_t const regenSize = LZ4_decompress_safe(blockTable[blockNb].cPtr, blockTable[blockNb].resPtr, (int)blockTable[blockNb].cSize, (int)blockTable[blockNb].srcSize);
-                        if (LZ4_isError(regenSize)) {
-                            DISPLAY("LZ4_decompress_safe() failed on block %u  \n", blockNb);
+                        size_t const regenSize = LZ4F_decompress_usingDict(dctx, blockTable[blockNb].resPtr, &blockTable[blockNb].srcSize, blockTable[blockNb].cPtr, &blockTable[blockNb].cSize, dict, dictSize, NULL);
+                        if (LZ4F_isError(regenSize)) {
+                            DISPLAY("LZ4F_decompress_usingDict() failed on block %u  \n", blockNb);
                             clockLoop = 0;   /* force immediate test end */
                             break;
                         }

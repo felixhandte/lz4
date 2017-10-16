@@ -35,6 +35,7 @@
 /*---   Dependency   ---*/
 #include <stddef.h>   /* size_t */
 
+#include "lz4frame_static.h"
 
 /* ************************************************** */
 /* Special input/output values                        */
@@ -65,6 +66,11 @@ int LZ4IO_decompressMultipleFilenames(const char** inFileNamesTable, int ifntSiz
 /* ************************************************** */
 
 int LZ4IO_setDictionaryFilename(const char* dictionaryFilename);
+const char* LZ4IO_getDictionaryFilename(void);
+
+void* LZ4IO_createDict(const char* dictFilename, size_t *dictSize);
+
+LZ4F_CDict* LZ4IO_createCDict(void);
 
 /* Default setting : overwrite = 1;
    return : overwrite mode (0/1) */

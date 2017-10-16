@@ -152,6 +152,10 @@ int LZ4IO_setDictionaryFilename(const char* dictionaryFilename) {
     return g_useDictionary;
 }
 
+const char* LZ4IO_getDictionaryFilename(void) {
+    return g_dictionaryFilename;
+}
+
 /* Default setting : overwrite = 1; return : overwrite mode (0/1) */
 int LZ4IO_setOverwrite(int yes)
 {
@@ -408,7 +412,7 @@ typedef struct {
     LZ4F_CDict* cdict;
 } cRess_t;
 
-static void* LZ4IO_createDict(const char* dictFilename, size_t *dictSize) {
+void* LZ4IO_createDict(const char* dictFilename, size_t *dictSize) {
     size_t readSize;
     size_t dictEnd = 0;
     size_t dictLen = 0;
@@ -464,7 +468,7 @@ static void* LZ4IO_createDict(const char* dictFilename, size_t *dictSize) {
     return dictBuf;
 }
 
-static LZ4F_CDict* LZ4IO_createCDict(void) {
+LZ4F_CDict* LZ4IO_createCDict(void) {
     size_t dictionarySize;
     void* dictionaryBuffer;
     LZ4F_CDict* cdict;
