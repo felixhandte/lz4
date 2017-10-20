@@ -587,6 +587,7 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
     for ( ; ; ) {
         ptrdiff_t refDelta = 0;
         const BYTE* match;
+        const BYTE* dictMatch;
         BYTE* token;
 
         /* Find a match */
@@ -602,20 +603,16 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
                 if (unlikely(forwardIp > mflimit)) goto _last_literals;
 
                 match = LZ4_getPositionOnHash(h, cctx->hashTable, tableType, base);
-                if (dict==usingExtDict) {
-                    if (match == base) {
-                        /* there was no match at all, try the dictionary */
-                        if (cctx->dictHashTable != NULL) {
-                            match = LZ4_getPositionOnHash(h, cctx->dictHashTable, tableType, source);
-                        }
-                    }
-                    if (match < (const BYTE*)source && dictionary != NULL) {
-                        refDelta = dictDelta;
-                        lowLimit = dictionary;
-                    } else {
-                        refDelta = 0;
-                        lowLimit = (const BYTE*)source;
-                }   }
+                dictMatch = cctx->dictHashTable ? LZ4_getPositionOnHash(h, cctx->dictHashTable, tableType, source) : source;
+
+                if (match < (const BYTE*)source && dictionary != NULL) {
+                    match = dictMatch;
+                    refDelta = dictDelta;
+                    lowLimit = dictionary;
+                } else {
+                    refDelta = 0;
+                    lowLimit = (const BYTE*)source;
+                }
                 forwardH = LZ4_hashPosition(forwardIp, tableType);
                 LZ4_putPositionOnHash(ip, h, cctx->hashTable, tableType, base);
 
