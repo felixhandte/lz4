@@ -541,15 +541,20 @@ size_t LZ4F_compressBegin_usingCDict(LZ4F_cctx* cctxPtr,
         /* frame init only for blockLinked : blockIndependent will be init at each block */
         if (cdict) {
             if (cctxPtr->prefs.compressionLevel < LZ4HC_CLEVEL_MIN) {
-                /* Clear the table */
-                memset(cctxPtr->lz4CtxPtr, 0, LZ4_HASHTABLESIZE);
+                LZ4_stream_t_internal* internal_ctx = &((LZ4_stream_t*)cctxPtr)->internal_donotuse;
+                U32 currentOffset = internal_ctx->currentOffset;
+                if (internal_ctx->initCheck) {
+                    /* Clear the table */
+                    memset(internal_ctx->hashTable, 0, LZ4_HASHTABLESIZE);
+                }
                 /* Copy everything but the hashtable over. */
                 memcpy(
                     ((BYTE *)cctxPtr->lz4CtxPtr) + LZ4_HASHTABLESIZE,
                     ((BYTE *)cdict->fastCtx) + LZ4_HASHTABLESIZE,
                     sizeof(LZ4_stream_t) - LZ4_HASHTABLESIZE);
                 /* Point to the dictionary's hash table. */
-                ((LZ4_stream_t*)cctxPtr->lz4CtxPtr)->internal_donotuse.dictHashTable = cdict->fastCtx->internal_donotuse.hashTable;
+                internal_ctx->dictCtx = &(cdict->fastCtx->internal_donotuse);
+                internal_ctx->currentOffset = currentOffset;
             } else {
                 memcpy(cctxPtr->lz4CtxPtr, cdict->HCCtx, sizeof(*cdict->HCCtx));
                 LZ4_setCompressionLevel((LZ4_streamHC_t*)cctxPtr->lz4CtxPtr, cctxPtr->prefs.compressionLevel);
@@ -655,15 +660,20 @@ static int LZ4F_compressBlock(void* ctx, const char* src, char* dst, int srcSize
 {
     int const acceleration = (level < -1) ? -level : 1;
     if (cdict) {
-        /* Clear the table */
-        memset(ctx, 0, LZ4_HASHTABLESIZE);
+        LZ4_stream_t_internal* internal_ctx = &((LZ4_stream_t*)ctx)->internal_donotuse;
+        U32 currentOffset = internal_ctx->currentOffset;
+        if (internal_ctx->initCheck) {
+            /* Clear the table */
+            memset(internal_ctx->hashTable, 0, LZ4_HASHTABLESIZE);
+        }
         /* Copy everything but the hashtable over. */
         memcpy(
             ((BYTE *)ctx) + LZ4_HASHTABLESIZE,
             ((BYTE *)cdict->fastCtx) + LZ4_HASHTABLESIZE,
             sizeof(LZ4_stream_t) - LZ4_HASHTABLESIZE);
         /* Point to the dictionary's hash table. */
-        ((LZ4_stream_t*)ctx)->internal_donotuse.dictHashTable = cdict->fastCtx->internal_donotuse.hashTable;
+        internal_ctx->dictCtx = &(cdict->fastCtx->internal_donotuse);
+        internal_ctx->currentOffset = currentOffset;
         return LZ4_compress_fast_continue((LZ4_stream_t*)ctx, src, dst, srcSize, dstCapacity, acceleration);
     }
     return LZ4_compress_fast_extState(ctx, src, dst, srcSize, dstCapacity, acceleration);

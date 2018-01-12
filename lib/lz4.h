@@ -356,7 +356,7 @@ typedef struct {
     uint32_t currentOffset;
     uint32_t initCheck;
     const uint8_t* dictionary;
-    const uint32_t* dictHashTable;
+    const void* dictCtx;
     uint32_t dictSize;
 } LZ4_stream_t_internal;
 
@@ -374,7 +374,7 @@ typedef struct {
     unsigned int currentOffset;
     unsigned int initCheck;
     const unsigned char* dictionary;
-    const unsigned int* dictHashTable;
+    const void* dictCtx;
     unsigned int dictSize;
 } LZ4_stream_t_internal;
 

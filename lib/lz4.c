@@ -32,6 +32,7 @@
     - LZ4 source repository : https://github.com/lz4/lz4
 */
 
+#include <stdio.h>
 
 /*-************************************
 *  Tuning parameters
@@ -547,11 +548,14 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
     const BYTE* const lowRefLimit = ip - cctx->dictSize;
     const BYTE* const dictionary = cctx->dictionary;
     const BYTE* const dictEnd = dictionary + cctx->dictSize;
-    const ptrdiff_t dictDelta = dictionary ? dictEnd - (const BYTE*)source : 0;
     const BYTE* anchor = (const BYTE*) source;
     const BYTE* const iend = ip + inputSize;
     const BYTE* const mflimit = iend - MFLIMIT;
     const BYTE* const matchlimit = iend - LASTLITERALS;
+
+    const LZ4_stream_t_internal* dictCtx = cctx->dictCtx;
+    const BYTE* dictBase = dictCtx ? source - dictCtx->dictSize - dictCtx->currentOffset : source - cctx->dictSize - cctx->currentOffset;
+    const ptrdiff_t dictDelta = dictionary ? dictEnd - (const BYTE*)source : 0;
 
     BYTE* op = (BYTE*) dest;
     BYTE* const olimit = op + maxOutputSize;
@@ -579,6 +583,17 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
     if ((tableType == byU16) && (inputSize>=LZ4_64Klimit)) return 0;   /* Size too large (not within 64K limit) */
     if (inputSize<LZ4_minLength) goto _last_literals;                  /* Input too small, no compression (all literals) */
 
+    fprintf(stderr, "src       %p\n", source);
+    fprintf(stderr, "curOff    %d\n", cctx->currentOffset);
+    fprintf(stderr, "base      %p\n", base);
+    fprintf(stderr, "cdict     %p\n", cctx->dictionary);
+    fprintf(stderr, "cdictsize %ld\n", cctx->dictSize);
+    fprintf(stderr, "ddict     %p\n", dictCtx->dictionary);
+    fprintf(stderr, "ddictsize %ld\n", dictCtx->dictSize);
+    fprintf(stderr, "dCurOff   %d\n", dictCtx->currentOffset);
+    fprintf(stderr, "dbase     %p\n", dictBase);
+    fprintf(stderr, "dictDelta %ld\n", dictDelta);
+
     /* First Byte */
     LZ4_putPosition(ip, cctx->hashTable, tableType, base);
     ip++; forwardH = LZ4_hashPosition(ip, tableType);
@@ -603,15 +618,14 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
 
                 match = LZ4_getPositionOnHash(h, cctx->hashTable, tableType, base);
                 if (dict==usingExtDict) {
-                    if (match == base) {
+                    if (match < source && dictCtx != NULL) {
                         /* there was no match at all, try the dictionary */
-                        if (cctx->dictHashTable != NULL) {
-                            match = LZ4_getPositionOnHash(h, cctx->dictHashTable, tableType, source);
-                        }
+                        match = LZ4_getPositionOnHash(h, dictCtx->hashTable, tableType, dictBase);
                     }
                     if (match < (const BYTE*)source && dictionary != NULL) {
                         refDelta = dictDelta;
                         lowLimit = dictionary;
+                        fprintf(stderr, "dict match %p (src + %ld) %p (dict + %ld)\n", match, match - (const BYTE *)source, match + refDelta, match + refDelta - dictionary);
                     } else {
                         refDelta = 0;
                         lowLimit = (const BYTE*)source;
@@ -700,11 +714,10 @@ _next_match:
         /* Test next position */
         match = LZ4_getPosition(ip, cctx->hashTable, tableType, base);
         if (dict==usingExtDict) {
-            if (match == base) {
+            if (match < source && dictCtx != NULL) {
                 /* there was no match at all, try the dictionary */
-                if (cctx->dictHashTable != NULL) {
-                    match = LZ4_getPosition(ip, cctx->dictHashTable, tableType, base);
-                }
+                match = LZ4_getPosition(ip, dictCtx->hashTable, tableType, dictBase);
+                fprintf(stderr, "final dict match %p %p\n", match, match + dictDelta);
             }
             if (match < (const BYTE*)source && dictionary != NULL) {
                 refDelta = dictDelta;
@@ -1032,6 +1045,9 @@ int LZ4_loadDict (LZ4_stream_t* LZ4_dict, const char* dictionary, int dictSize)
     const BYTE* const dictEnd = p + dictSize;
     const BYTE* base;
 
+    fprintf(stderr, "LZ4_loadDict dict %p\n", dictionary);
+    fprintf(stderr, "LZ4_loadDict size %ld\n", dictSize);
+
     if ((dict->initCheck) || (dict->currentOffset > 1 GB))  /* Uninitialized structure, or reuse overflow */
         LZ4_resetStream(LZ4_dict);
 
@@ -1041,6 +1057,8 @@ int LZ4_loadDict (LZ4_stream_t* LZ4_dict, const char* dictionary, int dictSize)
     dict->dictionary = p;
     dict->dictSize = (U32)(dictEnd - p);
     dict->currentOffset += dict->dictSize;
+
+    fprintf(stderr, "LZ4_loadDict cur off %ld\n", dict->currentOffset);
 
     if (dictSize < (int)HASH_UNIT) {
         return 0;
