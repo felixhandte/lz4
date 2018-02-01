@@ -1235,8 +1235,9 @@ int LZ4_compress_fast_continue (LZ4_stream_t* LZ4_stream, const char* source, ch
                * so that the compression loop is only looking in one table.
                */
               memcpy(streamPtr, streamPtr->dictCtx, sizeof(LZ4_stream_t));
+            } else {
+              LZ4_resetTable(streamPtr, inputSize, tableType, usingExtDict);
             }
-            LZ4_resetTable(streamPtr, inputSize, tableType, usingExtDict);
             if ((streamPtr->dictSize < 64 KB) && (streamPtr->dictSize < streamPtr->currentOffset)) {
                 result = LZ4_compress_generic(streamPtr, source, dest, inputSize, maxOutputSize, limitedOutput, tableType, usingExtDict, dictSmall, acceleration);
             } else {
