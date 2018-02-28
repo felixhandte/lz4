@@ -861,9 +861,7 @@ int LZ4_compress_fast(const char* source, char* dest, int inputSize, int maxOutp
     LZ4_stream_t ctx;
     LZ4_stream_t* const ctxPtr = &ctx;
 #endif
-    ctxPtr->internal_donotuse.initCheck = 0;
-    ctxPtr->internal_donotuse.tableType = byPtr; /* always triggers a reset */
-    result = LZ4_compress_fast_safeExtState(ctxPtr, source, dest, inputSize, maxOutputSize, acceleration);
+    result = LZ4_compress_fast_extState(ctxPtr, source, dest, inputSize, maxOutputSize, acceleration);
 
 #if (LZ4_HEAPMODE)
     FREEMEM(ctxPtr);
