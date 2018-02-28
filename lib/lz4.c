@@ -649,8 +649,11 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
                 if (dictDirective == usingExtDictCtx) {
                     if (match < (const BYTE*)source) {
                         /* there was no match, try the dictionary */
-                        /* TODO: use precalc-ed hash? */
-                        match = LZ4_getPosition(ip, dictCtx->hashTable, byU32, dictBase);
+                        if (tableType == byU32) {
+                            match = LZ4_getPositionOnHash(h, dictCtx->hashTable, byU32, dictBase);
+                        } else {
+                            match = LZ4_getPosition(ip, dictCtx->hashTable, byU32, dictBase);
+                        }
                         refDelta = dictDelta;
                         lowLimit = dictLowLimit;
                     } else {
