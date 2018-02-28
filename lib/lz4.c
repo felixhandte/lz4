@@ -668,8 +668,8 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
                 forwardH = LZ4_hashPosition(forwardIp, tableType);
                 LZ4_putPositionOnHash(ip, h, cctx->hashTable, tableType, base);
 
-            } while ( match < lowRefLimit
-                || ((tableType==byU16) ? 0 : (match + MAX_DISTANCE < ip))
+            } while ( ((match < lowRefLimit)
+                | ((tableType==byU16) ? 0 : (match + MAX_DISTANCE < ip)))
                 || (LZ4_read32(match+refDelta) != LZ4_read32(ip)) );
         }
 
@@ -767,8 +767,8 @@ _next_match:
                 lowLimit = (const BYTE*)source;
         }   }
         LZ4_putPosition(ip, cctx->hashTable, tableType, base);
-        if ( match >= lowRefLimit
-            && (match+MAX_DISTANCE>=ip)
+        if ( ((match >= lowRefLimit)
+            & ((tableType==byU16) ? 1 : (match+MAX_DISTANCE>=ip)))
             && (LZ4_read32(match+refDelta)==LZ4_read32(ip)) )
         { token=op++; *token=0; goto _next_match; }
 
