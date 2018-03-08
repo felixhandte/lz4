@@ -544,14 +544,8 @@ LZ4_FORCE_INLINE void LZ4_resetTable(
   {
       DEBUGLOG(4, "Resetting table in %p", cctx);
       MEM_INIT(cctx->hashTable, 0, LZ4_HASHTABLESIZE);
-      cctx->currentOffset = 0;
+      cctx->currentOffset = tableType == byU32 ? 64 KB : 0;
       cctx->tableType = unusedTable;
-  }
-  if (dictDirective == usingExtDictCtx &&
-      tableType != byPtr &&
-      cctx->currentOffset == 0)
-  {
-      cctx->currentOffset = 1;
   }
 }
 
