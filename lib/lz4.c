@@ -635,19 +635,13 @@ LZ4_FORCE_INLINE int LZ4_compress_generic(
                 if (unlikely(forwardIp > mflimit)) goto _last_literals;
 
                 match = LZ4_getPositionOnHash(h, cctx->hashTable, tableType, base);
-                if (dictDirective == usingExtDictCtx) {
+                if (dictDirective==usingExtDict || dictDirective == usingExtDictCtx) {
                     if (match < (const BYTE*)source) {
-                        /* there was no match, try the dictionary */
-                        /* TODO: use precalc-ed hash? */
-                        match = LZ4_getPosition(ip, dictCtx->hashTable, byU32, dictBase);
-                        refDelta = dictDelta;
-                        lowLimit = dictLowLimit;
-                    } else {
-                        refDelta = 0;
-                        lowLimit = (const BYTE*)source;
-                    }
-                } else if (dictDirective==usingExtDict) {
-                    if (match < (const BYTE*)source) {
+                        if (dictDirective == usingExtDictCtx) {
+                          /* there was no match, try the dictionary */
+                          /* TODO: use precalc-ed hash? */
+                          match = LZ4_getPosition(ip, dictCtx->hashTable, byU32, dictBase);
+                        }
                         refDelta = dictDelta;
                         lowLimit = dictLowLimit;
                     } else {
@@ -736,19 +730,13 @@ _next_match:
 
         /* Test next position */
         match = LZ4_getPosition(ip, cctx->hashTable, tableType, base);
-        if (dictDirective == usingExtDictCtx) {
+        if (dictDirective==usingExtDict || dictDirective == usingExtDictCtx) {
             if (match < (const BYTE*)source) {
-                /* there was no match, try the dictionary */
-                /* TODO: use precalc-ed hash? */
-                match = LZ4_getPosition(ip, dictCtx->hashTable, byU32, dictBase);
-                refDelta = dictDelta;
-                lowLimit = dictLowLimit;
-            } else {
-                refDelta = 0;
-                lowLimit = (const BYTE*)source;
-            }
-        } else if (dictDirective==usingExtDict) {
-            if (match < (const BYTE*)source) {
+                if (dictDirective == usingExtDictCtx) {
+                    /* there was no match, try the dictionary */
+                    /* TODO: use precalc-ed hash? */
+                    match = LZ4_getPosition(ip, dictCtx->hashTable, byU32, dictBase);
+                }
                 refDelta = dictDelta;
                 lowLimit = dictLowLimit;
             } else {
